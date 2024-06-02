@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <string.h>
 
 #define PI 3.14159265358979323846
 
@@ -26,9 +27,36 @@ int main(int argc, char * argv[])
     }
 
     /**Parse the command line to recieve the input file, output file name and the sigma value*/
-    const char* inputFile = argv[1]; //input binary PGM file
-    const char* outputFile = argv[2]; //output binary PGM file
+    const char* input_file = argv[1]; //input binary PGM file
+    const char* output_file = argv[2]; //output binary PGM file
     uint32_t sigma = atoi(argv[3]); //sigma value
+
+    char temp[200]; // temporary string to hold a copy of the input filename
+    uint32_t width = 0;
+
+    // Copy the filename to a temporary string
+    strcpy(temp, input_file);
+
+    // Find the position of the last underscore
+    char *underscore_pos = strrchr(temp, '_');
+    if (underscore_pos != NULL) {
+        // Find the position of the dot
+        char *dot_pos = strchr(underscore_pos, '.');
+        if (dot_pos != NULL) {
+            // Null-terminate the string at the dot position to isolate the number
+            *dot_pos = '\0';
+            // Convert the substring to an integer
+            width = atoi(underscore_pos + 1);
+        }
+    }
+    printf("%d\n", width);
+
+    /**Open the input binary PGM file*/
+    FILE* file = fopen(input_file, "rb");
+    if (file == NULL) {
+        perror("Cannot open file");
+        exit(1);
+    }
 
     /**Validate the bounds of sigma*/
     if (sigma <= 0) {
@@ -47,6 +75,7 @@ int main(int argc, char * argv[])
     float normalizer = 1 / (2 * PI * sigma * sigma);
     float sum = 0.0;
 
+    //fills in the gaussian kernel matrix
     for (size_t x = 0; x < kernel_order; x++) {
         for (size_t y = 0; y < kernel_order; y++) {
             uint32_t x_offset = x - half_order;
@@ -56,6 +85,7 @@ int main(int argc, char * argv[])
         }
     }
 
+    //normalizes the gaussian kernel matrix to the total sum
     for (size_t i = 0; i < kernel_order; i++) {
         for (size_t j = 0; j < kernel_order; j++) {
             kernel_matrix[i][j] /= sum;
