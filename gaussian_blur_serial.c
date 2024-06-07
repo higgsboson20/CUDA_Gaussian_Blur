@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <string.h>
+#include <stdint.h>
 
 #define PI 3.14159265358979323846
 
@@ -34,7 +35,12 @@ int main(int argc, char * argv[])
     }
 
     // Read PGM header
-    fscanf(file, "P5\n%ld %ld\n%d\n", &width, &height, &max_value);
+    if (fscanf(file, "P5\n%d %d\n%d\n", &width, &height, &max_value) != 3) {
+        fprintf(stderr, "Error reading image header\n");
+        fclose(file);
+        return 1;
+    }
+
     printf("%d\n", width);
     printf("%d\n", height);
     printf("%d\n", max_value);
@@ -42,8 +48,12 @@ int main(int argc, char * argv[])
     //get the image matrix
     unsigned char* input_image = malloc(height * width);
     unsigned char* blurred_image =  malloc(height * width);
-    fread(input_image, sizeof(unsigned char), height * width, file);
-
+    if (fread(input_image, sizeof(unsigned char), height * width, file) != height * width) {
+        fprintf(stderr, "Error reading image data\n");
+        free(input_image);
+        fclose(file);
+        return 1;
+    }
 /** 
      for (size_t i = 0; i < height; i++) {
         for (size_t j = 0; j < width; j++) {
