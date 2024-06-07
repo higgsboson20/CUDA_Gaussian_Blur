@@ -40,11 +40,9 @@ int main(int argc, char * argv[])
     printf("%d\n", max_value);
 
     //get the image matrix
-    float input_matrix[height][width];
-    for (size_t i = 0; i < height; i++) {
-            fread(input_matrix[i], sizeof(float), width, file);
-    }
-    fclose(file);
+    unsigned char* input_image = malloc(height * width);
+    unsigned char* blurred_image =  malloc(height * width);
+    fread(input_image, sizeof(unsigned char), height * width, file);
 
 /** 
      for (size_t i = 0; i < height; i++) {
@@ -95,22 +93,44 @@ int main(int argc, char * argv[])
     }
 
     /**Perform the convolution of the kernel matrix onto the input image*/
-    float output_matrix[height][width];
-
-    for (int y = 0; y < height; y++) {
-        for (int x = 0; x < width; x++) {
-            float pixel_value = 0.0;
-
-            for (int ky = -half_order; ky <= half_order; ky++) {
-                for (int kx = -half_order; kx <= half_order; kx++) {
-                    int ix = x + kx;
-                    int iy = y + ky;
-                    if (ix >= 0 && ix < width && iy >= 0 && iy < height) {
-                        pixel_value += input_matrix[iy][ix] * kernel_matrix[ky + half_order][kx + half_order];
-                    }
-                }
+    size_t j_start;
+    size_t i_start;
+    size_t dd, dr;
+    size_t dc = (kernel_order - 1)/2;
+    for (size_t i = 0; i < height; i++){
+        for (size_t j = 0; j < width; j++){
+            dd = (height - 1) - i;
+            dr = (width - 1) - j;
+            if(dd >= dc){
+                i_start = i > dc ? i - dc : 0;
+            } else{
+                i_start = i - (abs(dd - dc) + dc);
             }
-            output_matrix[y][x] = (unsigned char)pixel_value;
+
+            if(dr >= dc){
+                j_start = j > dc ? j - dc : 0;
+            } else{
+                j_start = j - (abs(dr - dc) + dc);
+            }
+
+
+            //printf("%ld %ld ,", i_start, j_start);
+            //printf("%ld %ld \n", i, j);
+
+            float conv = 0;
+            size_t k_i = 0, k_j = 0;
+
+            for(size_t ii = i_start; ii < i_start + kernel_order; ii++){
+                for(size_t jj = j_start; jj < j_start + kernel_order; jj++){
+                    conv += input_image[width*ii + jj]*kernel_matrix[k_i][k_j];
+                    k_j++;
+                }       
+                k_i++;
+                k_j = 0;
+            }
+
+            blurred_image[i*width + j] = (unsigned char)conv;
+
         }
     }
 
@@ -122,11 +142,11 @@ int main(int argc, char * argv[])
     }
 
     //write PGM header
-    fprintf(out, "P5\n%ld %ld\n%d\n", width, height, max_value);
-    for (int i = 0; i < height; i++) {
-        fwrite(output_matrix[i], sizeof(unsigned char), width, out);
-    }
+    fprintf(out, "P5\n%d %d\n%d\n", width, height, max_value);
+    fwrite(blurred_image, sizeof(unsigned char), height * width, out);
     fclose(out);
+    free(input_image);
+    free(blurred_image);
 
     return 0;
 } 
