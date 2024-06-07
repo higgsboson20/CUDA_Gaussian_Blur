@@ -48,6 +48,8 @@ int main(int argc, char * argv[])
     //get the image matrix
     unsigned char* input_image = malloc(height * width);
     unsigned char* blurred_image =  malloc(height * width);
+    uint32_t seek_dist = 3 + 2*(int)log10(width) + 4 + 4; // |firstLine| + |secondLine| + |thirdLine|
+    fseek(file, seek_dist, SEEK_SET);
     if (fread(input_image, sizeof(unsigned char), height * width, file) != height * width) {
         fprintf(stderr, "Error reading image data\n");
         free(input_image);
@@ -103,44 +105,21 @@ int main(int argc, char * argv[])
     }
 
     /**Perform the convolution of the kernel matrix onto the input image*/
-    size_t j_start;
-    size_t i_start;
-    size_t dd, dr;
-    size_t dc = (kernel_order - 1)/2;
-    for (size_t i = 0; i < height; i++){
-        for (size_t j = 0; j < width; j++){
-            dd = (height - 1) - i;
-            dr = (width - 1) - j;
-            if(dd >= dc){
-                i_start = i > dc ? i - dc : 0;
-            } else{
-                i_start = i - (abs(dd - dc) + dc);
+    for (size_t i = 0; i < height; i++) {
+        for (size_t j = 0; j < width; j++) {
+            float pixel_value = 0.0;
+
+            for (size_t k = 0; k < kernel_order; k++) {
+                for (size_t l = 0; l < kernel_order; l++) {
+                    size_t x = j - half_order + l;
+                    size_t y = i - half_order + k;  
+
+                    if (x >= 0 && x < width && y >= 0 && y < height) {
+                        pixel_value += input_image[width * y + x] * kernel_matrix[k][l];
+                    }
+                }
             }
-
-            if(dr >= dc){
-                j_start = j > dc ? j - dc : 0;
-            } else{
-                j_start = j - (abs(dr - dc) + dc);
-            }
-
-
-            //printf("%ld %ld ,", i_start, j_start);
-            //printf("%ld %ld \n", i, j);
-
-            float conv = 0;
-            size_t k_i = 0, k_j = 0;
-
-            for(size_t ii = i_start; ii < i_start + kernel_order; ii++){
-                for(size_t jj = j_start; jj < j_start + kernel_order; jj++){
-                    conv += input_image[width*ii + jj]*kernel_matrix[k_i][k_j];
-                    k_j++;
-                }       
-                k_i++;
-                k_j = 0;
-            }
-
-            blurred_image[i*width + j] = (unsigned char)conv;
-
+            blurred_image[i * width + j]= (unsigned char) pixel_value;
         }
     }
 
