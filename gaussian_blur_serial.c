@@ -1,11 +1,12 @@
 
+#include <math.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <math.h>
 #include <string.h>
-#include <stdint.h>
 
 #define PI 3.14159265358979323846
+
 
 int main(int argc, char * argv[])
 {   
@@ -19,64 +20,51 @@ int main(int argc, char * argv[])
     const char* output_file = argv[2]; //output binary PGM file
     float sigma = atof(argv[3]); //sigma value
 
-    /**Validate the bounds of sigma and kernel*/
-    if (sigma <= 0) {
-        fprintf(stderr, "Sigma value must be greater than 0\n");
-        return EXIT_FAILURE;
-    }
-
-    uint32_t width, height, max_value = 0;
+    size_t width, height;
+    unsigned char max_value;
 
     /**Open the input binary PGM file*/
     FILE* file = fopen(input_file, "rb");
-    if (!file) {
+    if (file == NULL) {
         perror("Cannot open file");
         exit(1);
     }
 
-    // Read PGM header
-    if (fscanf(file, "P5\n%d %d\n%d\n", &width, &height, &max_value) != 3) {
+    //read through the input PGM file
+    if (fscanf(file, "P5\n%ld %ld\n%hhd\n", &width, &height, &max_value) != 3) {
         fprintf(stderr, "Error reading image header\n");
         fclose(file);
-        return 1;
+        return EXIT_FAILURE;
     }
 
-    printf("%d\n", width);
-    printf("%d\n", height);
-    printf("%d\n", max_value);
-
-    //get the image matrix
-    unsigned char* input_image = malloc(height * width);
-    unsigned char* blurred_image =  malloc(height * width);
-    uint32_t seek_dist = 3 + 2*(int)log10(width) + 4 + 4; // |firstLine| + |secondLine| + |thirdLine|
+    unsigned char * image = malloc(width*height); // image binary data
+    unsigned char * blurred_image = malloc(width*height); // blurred image
+    /** Push image into buffer */
+    int seek_dist = 3 + (int)log10(height) + (int)log10(width) + 4 + 4; // |firstLine| + |secondLine| + |thirdLine|
     fseek(file, seek_dist, SEEK_SET);
-    if (fread(input_image, sizeof(unsigned char), height * width, file) != height * width) {
+    if (fread(image, 1, height * width, file) != height * width) {
         fprintf(stderr, "Error reading image data\n");
-        free(input_image);
+        free(image);
         fclose(file);
         return 1;
     }
-/** 
-     for (size_t i = 0; i < height; i++) {
-        for (size_t j = 0; j < width; j++) {
-            printf("%.8f\t", input_matrix[i][j]);
-        }
-        printf("\n");
-    }
-    **/
-    printf("height: %d\n", height);
-    printf("width: %d\n", width);
 
-    /**Create the gaussian kernel matrix*/
-    uint32_t kernel_order = sigma * 6; //order of the kernel matrix
+
+    /**Validate the bounds of sigma*/
+    if (sigma <= 0) {
+        fprintf(stderr, "Sigma value must be greater than 0\n");
+        exit(1);
+    }
     
-    /**Validate the bounds of the kernel matrix*/
+    /**Create the gaussian kernel matrix*/
+    uint32_t kernel_order = ceil(sigma * 6); //order of the kernel matrix
+    uint32_t half_order = kernel_order / 2;
+
+     /**Validate the bounds of the kernel matrix*/
     if (kernel_order > width || kernel_order > height) {
         fprintf(stderr, "The kernel matrix should not be bigger than the input image size \n");
         return EXIT_FAILURE;
     }
-
-    uint32_t half_order = kernel_order / 2;
 
     if (kernel_order % 2 == 0) kernel_order += 1; //make it odd to account for edges
 
@@ -95,47 +83,72 @@ int main(int argc, char * argv[])
         }
     }
 
-    //normalizes the gaussian kernel matrix to the total sum
+    /** normalizes the gaussian kernel matrix to the total sum */
     for (size_t i = 0; i < kernel_order; i++) {
         for (size_t j = 0; j < kernel_order; j++) {
             kernel_matrix[i][j] /= sum;
-            printf("%.8f\t", kernel_matrix[i][j]);
         }
-        printf("\n");
     }
 
-    /**Perform the convolution of the kernel matrix onto the input image*/
-    for (size_t i = 0; i < height; i++) {
-        for (size_t j = 0; j < width; j++) {
-            float pixel_value = 0.0;
-
-            for (size_t k = 0; k < kernel_order; k++) {
-                for (size_t l = 0; l < kernel_order; l++) {
-                    size_t x = j - half_order + l;
-                    size_t y = i - half_order + k;  
-
-                    if (x >= 0 && x < width && y >= 0 && y < height) {
-                        pixel_value += input_image[width * y + x] * kernel_matrix[k][l];
-                    }
-                }
+    /** apply convolution to all pixels in image */
+    size_t j_start;
+    size_t i_start;
+    size_t dd, dr;
+    size_t dc = (kernel_order - 1)/2;
+    for (size_t i = 0; i < height; i++){
+        for (size_t j = 0; j < width; j++){
+            dd = (width - 1) - i;
+            dr = (width - 1) - j;
+            if(dd >= dc){
+                i_start = i > dc ? i - dc : 0;
+            } else{
+                i_start = i - (abs(dd - dc) + dc);
             }
-            blurred_image[i * width + j]= (unsigned char) pixel_value;
+
+            if(dr >= dc){
+                j_start = j > dc ? j - dc : 0;
+            } else{
+                j_start = j - (abs(dr - dc) + dc);
+            }
+
+
+            //printf("%ld %ld ,", i_start, j_start);
+            //printf("%ld %ld \n", i, j);
+
+            float conv = 0;
+            size_t k_i = 0, k_j = 0;
+
+            for(size_t ii = i_start; ii < i_start + kernel_order; ii++){
+                for(size_t jj = j_start; jj < j_start + kernel_order; jj++){
+                    conv += image[width*ii + jj]*kernel_matrix[k_i][k_j];
+                    k_j++;
+                }       
+                k_i++;
+                k_j = 0;
+            }
+
+            blurred_image[i*width + j] = (unsigned char)conv;
+
         }
     }
 
-    /**Write to the PGM file */
-    FILE* out = fopen(output_file, "wb");
-    if (!out) {
-        perror("Cannot open file");
+    /** output file */
+    FILE * out = fopen(output_file, "wb");
+    if(!out){
+        fprintf(stderr, "Error with opening file!\n");
         exit(1);
     }
+    fprintf(out, "P5\n%ld %ld\n%d\n", width, height, max_value); 
 
-    //write PGM header
-    fprintf(out, "P5\n%d %d\n%d\n", width, height, max_value);
-    fwrite(blurred_image, sizeof(unsigned char), height * width, out);
+    fwrite(blurred_image, sizeof(char), width*height, out);
+
     fclose(out);
-    free(input_image);
+    fclose(file);
+    free(image);
     free(blurred_image);
 
+
+
     return 0;
+
 } 
