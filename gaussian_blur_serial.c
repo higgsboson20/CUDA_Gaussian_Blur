@@ -116,7 +116,7 @@ int main(int argc, char * argv[])
                 conv /= weight_sum;
             }
             // Ensure the result is within the valid range for unsigned char
-            blurred_image[i * width + j] = (unsigned char)(conv < 0 ? 0 : (conv > 255 ? 255 : conv));
+            blurred_image[i * width + j] = (unsigned char)(conv);
         }
     }
 
