@@ -91,44 +91,32 @@ int main(int argc, char * argv[])
     }
 
     /** apply convolution to all pixels in image */
-    size_t j_start;
-    size_t i_start;
-    size_t dd, dr;
-    size_t dc = (kernel_order - 1)/2;
-    for (size_t i = 0; i < height; i++){
-        for (size_t j = 0; j < width; j++){
-            dd = (width - 1) - i;
-            dr = (width - 1) - j;
-            if(dd >= dc){
-                i_start = i > dc ? i - dc : 0;
-            } else{
-                i_start = i - (abs(dd - dc) + dc);
+      size_t dc = (kernel_order - 1) / 2;
+    for (size_t i = 0; i < height; i++) {
+        for (size_t j = 0; j < width; j++) {
+            float conv = 0.0;
+            float weight_sum = 0.0;
+            for (size_t ki = 0; ki < kernel_order; ki++) {
+                for (size_t kj = 0; kj < kernel_order; kj++) {
+                    int ii = i + ki - dc;
+                    int jj = j + kj - dc;
+
+                    // Handle boundaries by clamping to the nearest edge pixel
+                    if (ii < 0) ii = 0;
+                    if (ii >= height) ii = height - 1;
+                    if (jj < 0) jj = 0;
+                    if (jj >= width) jj = width - 1;
+
+                    conv += image[ii * width + jj] * kernel_matrix[ki][kj];
+                    weight_sum += kernel_matrix[ki][kj];
+                }
             }
-
-            if(dr >= dc){
-                j_start = j > dc ? j - dc : 0;
-            } else{
-                j_start = j - (abs(dr - dc) + dc);
+            // Normalize the convolution result to prevent overflow
+            if (weight_sum > 0) {
+                conv /= weight_sum;
             }
-
-
-            //printf("%ld %ld ,", i_start, j_start);
-            //printf("%ld %ld \n", i, j);
-
-            float conv = 0;
-            size_t k_i = 0, k_j = 0;
-
-            for(size_t ii = i_start; ii < i_start + kernel_order; ii++){
-                for(size_t jj = j_start; jj < j_start + kernel_order; jj++){
-                    conv += image[width*ii + jj]*kernel_matrix[k_i][k_j];
-                    k_j++;
-                }       
-                k_i++;
-                k_j = 0;
-            }
-
-            blurred_image[i*width + j] = (unsigned char)conv;
-
+            // Ensure the result is within the valid range for unsigned char
+            blurred_image[i * width + j] = (unsigned char)(conv < 0 ? 0 : (conv > 255 ? 255 : conv));
         }
     }
 
